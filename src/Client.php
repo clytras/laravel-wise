@@ -104,8 +104,13 @@ class Client
      * @return mixed
      * @throws ApiException|AuthenticationException|ValidationException|NotFoundException
      */
-    public function get(string $endpoint, array $params = [], array $headers = [], bool $cache = false, int $cacheTime = 300): mixed
-    {
+    public function get(
+        string $endpoint,
+        array $params = [],
+        array $headers = [],
+        bool $cache = false,
+        int $cacheTime = 300
+    ): mixed {
         if ($cache) {
             $cacheKey = "wise_get_" . md5($endpoint . json_encode($params));
             return Cache::remember($cacheKey, $cacheTime, function () use ($endpoint, $params, $headers) {
@@ -181,11 +186,15 @@ class Client
      * @return mixed
      * @throws ApiException|AuthenticationException|ValidationException|NotFoundException
      */
-    protected function makeRequest(string $method, string $endpoint, array $params = [], ?array $data = null, array $additionalHeaders = []): mixed
-    {
+    protected function makeRequest(
+        string $method,
+        string $endpoint,
+        array $params = [],
+        ?array $data = null,
+        array $additionalHeaders = []
+    ): mixed {
         $url = $this->getUrl($endpoint, $params);
         $headers = array_merge($this->headers, $additionalHeaders);
-
         $request = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->retry(3, 100); // Retry failed requests up to 3 times with 100ms delay
@@ -202,18 +211,20 @@ class Client
             throw new ApiException('Proxy is null', 500);
         }
         if (in_array($method, ['post', 'put', 'patch']) && $data !== null) {
-            $request->withBody(json_encode($data), 'application/json');
+            $request->withBody(json_encode($data));
         }
 
         $response = $request->$method($url);
 
+        $responseHeaders = $response->headers();
         $responseBody = isset($headers['Accept']) ? $response->body() : $response->json();
+        $responseBody = $responseBody ?: $response->body();
 
         if ($response->successful()) {
             return $responseBody;
         }
 
-        $this->handleRequestError($response->status(), $responseBody);
+        $this->handleRequestError($response->status(), $responseBody, $responseHeaders);
     }
 
     /**
@@ -223,7 +234,7 @@ class Client
      * @param array|null $responseBody
      * @throws ApiException|AuthenticationException|ValidationException|NotFoundException
      */
-    protected function handleRequestError(int $statusCode, ?array $responseBody): void
+    protected function handleRequestError(int $statusCode, ?array $responseBody, $responseHeaders): void
     {
         $message = $responseBody['error'] ?? $responseBody['message'] ?? 'Unknown error';
         $errorCode = $responseBody['code'] ?? null;
@@ -232,6 +243,8 @@ class Client
         switch ($statusCode) {
             case 401:
                 throw new AuthenticationException($message, $statusCode, $responseBody);
+            case 403:
+                throw new Illuminate\Http\Client\RequestException($message, $statusCode, $responseBody);
             case 404:
                 throw new NotFoundException($message, $statusCode, $responseBody);
             case 422:
@@ -240,5 +253,4 @@ class Client
                 throw new ApiException($message, $statusCode, $responseBody);
         }
     }
-
 }
