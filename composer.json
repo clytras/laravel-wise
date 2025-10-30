@@ -1,5 +1,5 @@
 {
-    "name": "lai3221/laravel-wise",
+    "name": "clytras/laravel-wise",
     "description": "A Laravel package for integrating with the Wise (formerly TransferWise) API",
     "type": "library",
     "license": "MIT",
